@@ -1,0 +1,138 @@
+Intro: #!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+NAO Robot Introduction Script
+Created for Mr. Terrell Reed's programming showcase
+For use with Python 2.7 and NAO API
+"""
+
+from naoqi import ALProxy
+import time
+import random
+
+# Initialize proxies
+try:
+    IP = "172.20.95.118"  # Your NAO's IP
+    PORT = 9559
+
+    tts = ALProxy("ALTextToSpeech", IP, PORT)
+    animatedSpeech = ALProxy("ALAnimatedSpeech", IP, PORT)
+    motion = ALProxy("ALMotion", IP, PORT)
+    posture = ALProxy("ALRobotPosture", IP, PORT)
+    leds = ALProxy("ALLeds", IP, PORT)
+    behavior = ALProxy("ALBehaviorManager", IP, PORT)
+
+    tts.setParameter("speed", 95)
+    tts.setParameter("pitchShift", 1.1)
+
+    motion.wakeUp()
+    posture.goToPosture("Stand", 0.8)
+
+except Exception, e:
+    print("Error connecting to NAO robot:")
+    print(str(e))
+    exit(1)
+
+animationMode = {"bodyLanguageMode": "contextual"}
+
+def feature_showcase():
+    animatedSpeech.say("^start(animations/Stand/Gestures/ShowSky_8) Let me tell you about my amazing features! First up, I have facial recognition capabilities. I can identify and remember faces, which means I never forget a face... but I might forget your name! ^wait(animations/Stand/Gestures/ShowSky_8)", animationMode)
+    time.sleep(0.5)
+
+    leds.fadeRGB("FaceLeds", 0.1, 0.1, 0.1, 1.0)
+    animatedSpeech.say("^start(animations/Stand/Gestures/Excited_1) I also have dark detection! I can adapt to low-light conditions. Basically, I'm a tiny robot superhero. ^wait(animations/Stand/Gestures/Excited_1)", animationMode)
+    leds.fadeRGB("FaceLeds", 1, 1, 1, 1.0)
+    time.sleep(0.5)
+
+    animatedSpeech.say("^start(animations/Stand/Gestures/IDontKnow_1) With mood detection, I can sense your emotions. Though I'm still learning about 'hangry'. ^wait(animations/Stand/Gestures/IDontKnow_1)", animationMode)
+    time.sleep(0.5)
+
+    animatedSpeech.say("I can also dance! Watch this!")
+    time.sleep(0.5)
+
+    # Manual dance moves
+    names = ["HeadYaw", "HeadPitch", "LShoulderPitch", "RShoulderPitch", "LShoulderRoll", "RShoulderRoll"]
+    dance_moves = [
+        [0.5, -0.5, 1.0, 1.0, 0.3, -0.3],
+        [-0.5, 0.5, 1.2, 1.2, -0.3, 0.3],
+        [0.0, 0.0, 1.5, 1.5, 0.0, 0.0],
+    ]
+    times = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+
+    for _ in range(3):
+        for move in dance_moves:
+            motion.angleInterpolation(names, move, times, True)
+
+    animatedSpeech.say("^start(animations/Stand/Emotions/Positive/Happy_1) How was that? I'm working on my moonwalk too! ^wait(animations/Stand/Emotions/Positive/Happy_1)", animationMode)
+    time.sleep(0.5)
+
+    animatedSpeech.say("^start(animations/Stand/Gestures/Peaceful_1) Need to relax? Let's breathe together. ^wait(animations/Stand/Gestures/Peaceful_1)", animationMode)
+    time.sleep(0.5)
+    animatedSpeech.say("Breathe in...", {"bodyLanguageMode": "disabled"})
+    time.sleep(2)
+    animatedSpeech.say("And breathe out...", {"bodyLanguageMode": "disabled"})
+    time.sleep(2)
+    animatedSpeech.say("^start(animations/Stand/Gestures/Peaceful_1) Feel better? I know I do, and I don't even have lungs! ^wait(animations/Stand/Gestures/Peaceful_1)", animationMode)
+    time.sleep(0.5)
+
+    animatedSpeech.say("^start(animations/Stand/Waiting/Rocket_1) I love music! I was going to rap, but my programmer stopped me. ^wait(animations/Stand/Waiting/Rocket_1)", animationMode)
+    time.sleep(0.5)
+
+    animatedSpeech.say("^start(animations/Stand/Gestures/YouKnowWhat_1) I understand voice commands, though Boston accents still confuse me. ^wait(animations/Stand/Gestures/YouKnowWhat_1)", animationMode)
+    time.sleep(0.5)
+
+    animatedSpeech.say("^start(animations/Stand/Gestures/Everything_4) All of this is thanks to Mr. Terell Reed. Let's give him a round of applause! ^wait(animations/Stand/Gestures/Everything_4)", animationMode)
+    behavior.runBehavior("animations/Stand/Gestures/CommunicationWelcome_1")
+
+def introduction():
+    behavior.runBehavior("animations/Stand/Gestures/Hey_1")
+    time.sleep(1)
+    animatedSpeech.say("^start(animations/Stand/Gestures/You_1) Hello everyone! Wow, what an amazing audience! ^wait(animations/Stand/Gestures/You_1)", animationMode)
+    time.sleep(0.5)
+
+    animatedSpeech.say("^start(animations/Stand/Gestures/Me_1) My name is NAO, and I'm your friendly neighborhood humanoid robot! ^wait(animations/Stand/Gestures/Me_1)", animationMode)
+    time.sleep(0.5)
+
+    animatedSpeech.say("^start(animations/Stand/Gestures/Enthusiastic_4) I'm 58cm tall and very flexible – fun-sized, if you will! ^wait(animations/Stand/Gestures/Enthusiastic_4)", animationMode)
+    time.sleep(0.5)
+
+    animatedSpeech.say("^start(animations/Stand/Gestures/ShowSky_1) I have 25 degrees of freedom, but still can't touch my toes! ^wait(animations/Stand/Gestures/ShowSky_1)", animationMode)
+    time.sleep(0.5)
+
+    animatedSpeech.say("^start(animations/Stand/Gestures/ShowTablet_1) Two HD cameras, four mics, and a bunch of sensors – like a Swiss Army knife but cuter! ^wait(animations/Stand/Gestures/ShowTablet_1)", animationMode)
+    time.sleep(0.5)
+
+    animatedSpeech.say("^start(animations/Stand/Gestures/Enthusiastic_5) Programmed by Mr. Terell Reed – without him, I'd be a cute paperweight. ^wait(animations/Stand/Gestures/Enthusiastic_5)", animationMode)
+    time.sleep(0.5)
+
+    leds.fadeRGB("FaceLeds", 0, 0, 1, 0.5)
+    time.sleep(0.5)
+    leds.fadeRGB("FaceLeds", 0, 1, 0, 0.5)
+    time.sleep(0.5)
+    leds.fadeRGB("FaceLeds", 1, 0, 0, 0.5)
+    time.sleep(0.5)
+    leds.fadeRGB("FaceLeds", 1, 1, 1, 0.5)
+
+    feature_showcase()
+
+    animatedSpeech.say("^start(animations/Stand/Gestures/Enthusiastic_1) That's me! Hope you enjoyed it! ^wait(animations/Stand/Gestures/Enthusiastic_1)", animationMode)
+    time.sleep(0.5)
+
+    animatedSpeech.say("^start(animations/Stand/Gestures/Hey_3) Got questions? Ask away! Just laugh at my bad jokes, please. ^wait(animations/Stand/Gestures/Hey_3)", animationMode)
+
+    behavior.runBehavior("animations/Stand/Emotions/Positive/Happy_4")
+
+if __name__ == "__main__":
+    try:
+        introduction()
+    except Exception, e:
+        print("Error during introduction:")
+        print(str(e))
+    finally:
+        print("Robot returned to rest position.")
+        posture.goToPosture("Crouch", 0.8)
+        motion.rest()
+        print("Script execution completed.")
+
+

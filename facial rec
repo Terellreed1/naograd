@@ -1,0 +1,241 @@
+
+
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+NAO Robot Face Recognition Demo - Ultra Simple Version
+IP Address: 172.20.95.118
+"""
+
+from naoqi import ALProxy
+import time
+import random
+import os
+
+# Robot IP
+IP = "172.20.95.118"
+PORT = 9559
+
+def main():
+    """Run the face recognition demo with Terell Reed recognition"""
+    print("Starting ultra simple face recognition demo...")
+    
+    try:
+        # Initialize proxies
+        tts = ALProxy("ALTextToSpeech", IP, PORT)
+        motion = ALProxy("ALMotion", IP, PORT)
+        posture = ALProxy("ALRobotPosture", IP, PORT)
+        face_detection = ALProxy("ALFaceDetection", IP, PORT)
+        memory = ALProxy("ALMemory", IP, PORT)
+        camera = ALProxy("ALVideoDevice", IP, PORT)
+        leds = ALProxy("ALLeds", IP, PORT)
+        audio_recorder = ALProxy("ALAudioRecorder", IP, PORT)
+        audio_player = ALProxy("ALAudioPlayer", IP, PORT)
+        
+        print("Connected to NAO successfully")
+        
+        # Wake up robot
+        motion.wakeUp()
+        posture.goToPosture("Stand", 0.8)
+        
+        # Introduction
+        tts.say("Starting visual perception system")
+        
+        # Setup face detection
+        face_detection.setRecognitionEnabled(True)
+        camera.setActiveCamera(0)  # Top camera
+        face_detection.subscribe("SimpleFaceDemo")
+        
+        # ----- PHASE 1: FIND FIRST FACE (TERELL) -----
+        
+        # Light effect
+        leds.fadeRGB("FaceLeds", 0x0000FF, 0.5)  # Blue
+        
+        # Initial scan
+        scan_movements = [
+            (0.6, 0.0), (0.3, -0.1), (0.0, 0.0), 
+            (-0.3, -0.1), (-0.6, 0.0), (0.0, -0.1)
+        ]
+        
+        for pos in scan_movements:
+            motion.setAngles("HeadYaw", pos[0], 0.1)
+            motion.setAngles("HeadPitch", pos[1], 0.1)
+            time.sleep(0.8)
+        
+        # Search for first face
+        found_terell = False
+        search_count = 0
+        
+        while not found_terell and search_count < 10:
+            search_count += 1
+            print("Searching for Terell, attempt", search_count)
+            
+            # Random head movement
+            motion.setAngles("HeadYaw", random.uniform(-0.6, 0.6), 0.1)
+            motion.setAngles("HeadPitch", random.uniform(-0.2, 0.1), 0.1)
+            time.sleep(1.0)
+            
+            # Get face data with careful validation
+            try:
+                faces = memory.getData("FaceDetected")
+                if faces and len(faces) > 0:
+                    # Face array has content
+                    leds.fadeRGB("FaceLeds", 0x00FF00, 0.3)  # Green for found face
+                    
+                    # Recognize as Terell
+                    tts.say("Oh! I see this guy all the time.")
+                    time.sleep(0.5)
+                    tts.say("This is Terell Reed.")
+                    time.sleep(0.5)
+                    tts.say("Fun fact about this dude. He has been working with me for over a year.")
+                    
+                    # Simple head nod
+                    current_pitch = motion.getAngles("HeadPitch", True)[0]
+                    motion.setAngles("HeadPitch", current_pitch + 0.1, 0.1)
+                    time.sleep(0.4)
+                    motion.setAngles("HeadPitch", current_pitch, 0.1)
+                    
+                    found_terell = True
+                    break
+            except Exception as e:
+                print("Error processing face data:", e)
+        
+        # If no face found, pretend we found Terell anyway
+        if not found_terell:
+            tts.say("I know Terell Reed is around here somewhere. Fun fact about him - he's been working with me for over a year.")
+        
+        # ----- PHASE 2: LOOK FOR SECOND FACE (VISITOR) -----
+        
+        # Say we want to see someone else
+        tts.say("But I want to see someone else though.")
+        time.sleep(0.3)
+        tts.say("Is there anyone else here I can meet?")
+        
+        # Look around for new faces
+        for pos in scan_movements:
+            motion.setAngles("HeadYaw", pos[0], 0.1)
+            motion.setAngles("HeadPitch", pos[1], 0.1)
+            time.sleep(0.8)
+        
+        # Search for visitor
+        found_visitor = False
+        search_count = 0
+        
+        while not found_visitor and search_count < 15:
+            search_count += 1
+            print("Searching for visitor, attempt", search_count)
+            
+            # Random head movement
+            motion.setAngles("HeadYaw", random.uniform(-0.6, 0.6), 0.1)
+            motion.setAngles("HeadPitch", random.uniform(-0.2, 0.1), 0.1)
+            time.sleep(1.0)
+            
+            # Get face data with careful validation
+            try:
+                faces = memory.getData("FaceDetected")
+                if faces and len(faces) > 0:
+                    # Found a face
+                    leds.fadeRGB("FaceLeds", 0xFFFF00, 0.3)  # Yellow for new face
+                    
+                    # LED effect for scanning
+                    leds.fadeRGB("FaceLeds", 0xFF9500, 0.2)  # Orange
+                    time.sleep(0.3)
+                    leds.fadeRGB("FaceLeds", 0x0099FF, 0.2)  # Blue
+                    time.sleep(0.3)
+                    leds.fadeRGB("FaceLeds", 0xFFFF00, 0.3)  # Back to yellow
+                    
+                    # Don't recognize them
+                    tts.say("Now I haven't seen this face. Or maybe I have. Either way, you're not in my database.")
+                    time.sleep(0.4)
+                    
+                    # Ask for name
+                    tts.say("What's your name?")
+                    
+                    # Record the visitor's name
+                    # File path for the recording
+                    recording_path = "/home/nao/recordings/visitor_name.wav"
+                    
+                    # Setup recording - 16kHz, 16-bit
+                    audio_recorder.startMicrophonesRecording(
+                        recording_path,
+                        "wav",
+                        16000,
+                        [1, 0, 0, 0]  # Front microphone only
+                    )
+                    
+                    # Indicate recording in progress
+                    leds.fadeRGB("EarLeds", 0xFF0000, 0.2)  # Red ears for recording
+                    
+                    # Recording duration - 3 seconds should be enough for a name
+                    time.sleep(3.0)
+                    
+                    # Stop recording
+                    audio_recorder.stopMicrophonesRecording()
+                    leds.fadeRGB("EarLeds", 0xFFFFFF, 0.2)  # Reset ear LEDs
+                    
+                    # Wait a moment before responding
+                    time.sleep(0.5)
+                    
+                    # Acknowledge and play back name
+                    tts.say("Nice to meet you!")
+                    
+                    # Play back their recorded name
+                    if os.path.exists(recording_path):
+                        file_id = audio_player.loadFile(recording_path)
+                        audio_player.play(file_id)
+                        
+                        # Wait for the playback to finish
+                        while audio_player.isRunning(file_id):
+                            time.sleep(0.1)
+                    
+                    # Pretend to learn face
+                    leds.fadeRGB("FaceLeds", 0xFF9500, 0.3)  # Orange for learning
+                    time.sleep(0.8)
+                    leds.fadeRGB("FaceLeds", 0x00CC00, 0.5)  # Green for success
+                    
+                    # Confirmation
+                    tts.say("I've added you to my facial recognition database. Now I'll remember you next time!")
+                    
+                    # Success nod
+                    current_pitch = motion.getAngles("HeadPitch", True)[0]
+                    motion.setAngles("HeadPitch", current_pitch + 0.1, 0.1)
+                    time.sleep(0.4)
+                    motion.setAngles("HeadPitch", current_pitch, 0.1)
+                    
+                    found_visitor = True
+                    break
+            except Exception as e:
+                print("Error processing visitor:", e)
+        
+        # If no visitor found
+        if not found_visitor:
+            tts.say("I guess there's no one new for me to meet right now. That's okay!")
+        
+        # Cleanup
+        face_detection.unsubscribe("SimpleFaceDemo")
+        leds.fadeRGB("FaceLeds", 0xFFFFFF, 0.5)  # Back to white
+        motion.setAngles("HeadYaw", 0.0, 0.1)
+        motion.setAngles("HeadPitch", 0.0, 0.1)
+        
+        tts.say("Visual perception test complete.")
+        
+        return True
+        
+    except Exception as e:
+        print("Error in face recognition demo:", e)
+        try:
+            # Try to clean up
+            posture = ALProxy("ALRobotPosture", IP, PORT)
+            posture.goToPosture("Stand", 0.8)
+        except:
+            pass
+        return False
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("Demo stopped by user")
+    except Exception as e:
+        print("An error occurred:", e)

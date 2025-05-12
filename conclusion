@@ -1,0 +1,61 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+from naoqi import ALProxy
+import time
+
+# Robot IP and Port
+IP = "172.20.95.118"
+PORT = 9559
+
+# Connect to proxies
+try:
+    tts = ALProxy("ALTextToSpeech", IP, PORT)
+    animatedSpeech = ALProxy("ALAnimatedSpeech", IP, PORT)
+    motion = ALProxy("ALMotion", IP, PORT)
+    posture = ALProxy("ALRobotPosture", IP, PORT)
+    behavior = ALProxy("ALBehaviorManager", IP, PORT)
+except Exception, e:
+    print("Error connecting to NAO:")
+    print(str(e))
+    exit(1)
+
+# Wake up and posture
+motion.wakeUp()
+posture.goToPosture("Stand", 0.8)
+
+# Set animated speech mode
+animationMode = {"bodyLanguageMode": "contextual"}
+
+# Conclusion performance
+def conclusion():
+    animatedSpeech.say("^start(animations/Stand/Gestures/ShowSky_3) What a journey it's been today! From smiles to circuits, we've done it all! ^wait(animations/Stand/Gestures/ShowSky_3)", animationMode)
+    time.sleep(0.5)
+
+    animatedSpeech.say("^start(animations/Stand/Gestures/Enthusiastic_5) I hope you had fun learning about me and all the awesome things I can do. ^wait(animations/Stand/Gestures/Enthusiastic_5)", animationMode)
+    time.sleep(0.5)
+
+    animatedSpeech.say("^start(animations/Stand/Emotions/Positive/Happy_3) A huge thank you to my brilliant programmer, Mr. Terell Reed, for bringing me to life and teaching me how to be the coolest robot in the room! ^wait(animations/Stand/Emotions/Positive/Happy_3)", animationMode)
+    time.sleep(0.5)
+
+    animatedSpeech.say("^start(animations/Stand/Gestures/Everything_4) If I made you smile, inspired a thought, or sparked a curiosity, then my job here is done. ^wait(animations/Stand/Gestures/Everything_4)", animationMode)
+    time.sleep(0.5)
+
+    animatedSpeech.say("^start(animations/Stand/Gestures/BowShort_1) So for now, this little robot is signing off. Stay curious, stay kind, and keep creating! ^wait(animations/Stand/Gestures/BowShort_1)", animationMode)
+    time.sleep(0.5)
+
+    animatedSpeech.say("^start(animations/Stand/Gestures/Hey_3) Goodbye, everyone! Hope to see you again soon! ^wait(animations/Stand/Gestures/Hey_3)", animationMode)
+
+    behavior.runBehavior("animations/Stand/Emotions/Positive/Happy_4")
+
+# Run it
+if __name__ == "__main__":
+    try:
+        conclusion()
+    except Exception, e:
+        print("Error during conclusion:")
+        print(str(e))
+    finally:
+        posture.goToPosture("Crouch", 0.8)
+        motion.rest()
+

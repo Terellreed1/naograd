@@ -1,0 +1,285 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+NAO Robot Simple Mood Detection Demo - Simulated Voice Recognition
+This script demonstrates the NAO robot's "emotional intelligence"
+IP Address: 172.20.95.118
+"""
+
+from naoqi import ALProxy
+import time
+import random
+import sys
+import thread
+
+# Robot IP
+IP = "172.20.95.118"
+PORT = 9559
+
+# Global variable for "heard" number
+heard_number = None
+
+def main():
+    """Run the simple mood detection demo"""
+    print("Starting simplified NAO mood detection demo...")
+    
+    try:
+        # Initialize proxies
+        tts = ALProxy("ALTextToSpeech", IP, PORT)
+        motion = ALProxy("ALMotion", IP, PORT)
+        posture = ALProxy("ALRobotPosture", IP, PORT)
+        camera = ALProxy("ALVideoDevice", IP, PORT)
+        leds = ALProxy("ALLeds", IP, PORT)
+        
+        print("Connected to NAO successfully")
+        
+        # Wake up robot
+        motion.wakeUp()
+        posture.goToPosture("Stand", 0.8)
+        
+        # Look directly forward
+        motion.setAngles("HeadYaw", 0.0, 0.1)  # Center horizontally
+        motion.setAngles("HeadPitch", 0.0, 0.1)  # Look straight ahead
+        
+        # Introduction
+        tts.say("I will now demonstrate my emotional intelligence capabilities.")
+        time.sleep(0.5)
+        tts.say("I can detect human emotions by analyzing facial expressions.")
+        
+        # Subscribe to the top camera
+        camera.setActiveCamera(0)  # Top camera
+        
+        # Run the mood detection loop
+        run_mood_detection(tts, motion, camera, leds)
+        
+        # Cleanup
+        motion.setAngles("HeadYaw", 0.0, 0.1)
+        motion.setAngles("HeadPitch", 0.0, 0.1)
+        leds.fadeRGB("FaceLeds", 0xFFFFFF, 0.5)  # Back to white
+        
+        return True
+        
+    except Exception as e:
+        print("Error in mood detection demo:", e)
+        try:
+            # Try to clean up
+            posture = ALProxy("ALRobotPosture", IP, PORT)
+            posture.goToPosture("Stand", 0.8)
+        except:
+            pass
+        return False
+
+def background_input(prompt):
+    """Get input in a separate thread so we can fake voice recognition timing"""
+    global heard_number
+    heard_number = raw_input(prompt)
+
+def run_mood_detection(tts, motion, camera, leds):
+    """Run the emotion detection demo sequence"""
+    # Instructions
+    tts.say("Please say the emotion number you want me to detect.")
+    time.sleep(0.5)
+    tts.say("Say 'one' for smile, 'two' for sadness, 'three' for anger, or 'four' for a calm expression.")
+    
+    # Processing parameters
+    emotions = {
+        "1": {"name": "smiling", "color": 0x00FF00, "responses": [
+            "I detect a smile on your face!",
+            "You appear to be happy!",
+            "I can see you're smiling."
+        ]},
+        "2": {"name": "sad", "color": 0x0000FF, "responses": [
+            "I detect sadness in your expression.",
+            "You seem to be feeling down.",
+            "Your facial features indicate sadness."
+        ]},
+        "3": {"name": "mad", "color": 0xFF0000, "responses": [
+            "I detect anger in your expression.",
+            "You appear to be frustrated or angry.",
+            "Your facial features show signs of displeasure."
+        ]},
+        "4": {"name": "calm", "color": 0x6600CC, "responses": [
+            "I detect a calm expression.",
+            "You appear to be in a neutral, relaxed state.",
+            "Your facial features indicate a composed demeanor."
+        ]}
+    }
+    
+    # Words we can pretend to recognize
+    word_to_number = {
+        "one": "1", "1": "1",
+        "two": "2", "2": "2",
+        "three": "3", "3": "3",
+        "four": "4", "4": "4",
+        "quit": "quit", "q": "quit"
+    }
+    
+    # Run emotion detection loop
+    keep_running = True
+    detection_count = 0
+    
+    while keep_running and detection_count < 10:
+        global heard_number
+        heard_number = None
+        
+        # Keep robot looking straight ahead
+        motion.setAngles("HeadYaw", 0.0, 0.1)
+        motion.setAngles("HeadPitch", 0.0, 0.1)
+        
+        # Ask for emotion number
+        tts.say("Please say a number from 1 to 4 for the emotion you want me to detect.")
+        
+        # Show "listening" behavior
+        leds.fadeRGB("EarLeds", 0x0000FF, 0.3)  # Blue ears for listening
+        tts.say("Listening...")
+        
+        # Start a background thread to get the input
+        thread.start_new_thread(background_input, ("Enter the spoken number (1-4) or 'q' to quit: ",))
+        
+        # Pretend to listen for 4 seconds - ideal timeframe for someone to say a number 
+        listen_time = 4.0
+        start_time = time.time()
+        
+        # Wait until either:
+        # 1. We get an input from the background thread, or
+        # 2. The listen time is up
+        while (heard_number is None) and (time.time() - start_time < listen_time):
+            time.sleep(0.1)
+        
+        # Reset ear LEDs
+        leds.fadeRGB("EarLeds", 0xFFFFFF, 0.3)
+        
+        # If we didn't "hear" anything, prompt again
+        if heard_number is None or heard_number.strip() == "":
+            tts.say("I didn't hear a number. Please try again.")
+            continue
+            
+        # Process the "heard" number
+        emotion_choice = heard_number.strip().lower()
+        
+        # Check for quit command
+        if emotion_choice in ["quit", "q"]:
+            keep_running = False
+            continue
+            
+        # Convert word to number if needed
+        if emotion_choice in word_to_number:
+            emotion_choice = word_to_number[emotion_choice]
+            
+        # Validate emotion choice
+        if emotion_choice not in emotions:
+            tts.say("I didn't understand that number. Please try again.")
+            continue
+        
+        # Get the emotion details
+        emotion = emotions[emotion_choice]
+        
+        # Subtle confirmation that makes it seem like the robot heard
+        tts.say("I heard number " + emotion_choice + ". Analyzing your facial expression...")
+        
+        # Processing animation with LEDs while keeping face forward
+        leds.fadeRGB("FaceLeds", 0xFF9500, 0.3)  # Orange
+        time.sleep(0.5)
+        
+        # Very subtle movements that keep the face in view
+        original_yaw = motion.getAngles("HeadYaw", True)[0]
+        original_pitch = motion.getAngles("HeadPitch", True)[0]
+        
+        # Small movements for scanning that don't move away from facing forward
+        motion.setAngles("HeadYaw", original_yaw + 0.05, 0.1)
+        time.sleep(0.3)
+        motion.setAngles("HeadYaw", original_yaw - 0.05, 0.1)
+        time.sleep(0.3)
+        motion.setAngles("HeadPitch", original_pitch - 0.05, 0.1)
+        time.sleep(0.3)
+        motion.setAngles("HeadPitch", original_pitch, 0.1)
+        
+        # Return to center
+        motion.setAngles("HeadYaw", 0.0, 0.1)
+        motion.setAngles("HeadPitch", 0.0, 0.1)
+        
+        # More processing indication
+        leds.fadeRGB("FaceLeds", 0x0099FF, 0.3)  # Blue
+        time.sleep(0.7)
+        
+        # Set LED color for this emotion
+        leds.fadeRGB("FaceLeds", emotion["color"], 0.5)
+        
+        # Generate "confidence" score (higher for emotions 1 and 4, more variable for 2 and 3)
+        if emotion_choice in ["1", "4"]:
+            confidence = random.uniform(85.0, 98.0)  # High confidence for smile and calm
+        else:
+            confidence = random.uniform(70.0, 95.0)  # More variable for sad and mad
+            
+        # Round to nearest tenth
+        confidence = round(confidence, 1)
+        
+        # Say detection response
+        response = random.choice(emotion["responses"])
+        tts.say(response)
+        
+        # Say confidence
+        tts.say("I am {:.1f} percent confident you are {}.".format(confidence, emotion["name"]))
+        
+        # React to the emotion with minimal head movement
+        if emotion_choice == "1":  # Smile
+            # Happy reaction
+            tts.say("Your smile is contagious!")
+            # Very subtle happy reaction
+            current_pitch = motion.getAngles("HeadPitch", True)[0]
+            motion.setAngles("HeadPitch", current_pitch + 0.05, 0.1)  # Smaller movement
+            time.sleep(0.3)
+            motion.setAngles("HeadPitch", current_pitch, 0.1)
+            
+        elif emotion_choice == "2":  # Sad
+            # Sympathetic reaction
+            tts.say("I hope you feel better soon.")
+            # Very slight head tilt
+            motion.setAngles("HeadRoll", 0.1, 0.1)  # Smaller tilt
+            time.sleep(0.6)
+            motion.setAngles("HeadRoll", 0.0, 0.1)
+            
+        elif emotion_choice == "3":  # Mad
+            # Calming reaction
+            tts.say("I sense your frustration. Would you like to talk about it?")
+            # Minimal movement
+            motion.setAngles("HeadPitch", 0.05, 0.1)  # Smaller movement
+            time.sleep(0.5)
+            motion.setAngles("HeadPitch", 0.0, 0.1)
+            
+        elif emotion_choice == "4":  # Calm
+            # Matching calm reaction
+            tts.say("Your composed demeanor is quite pleasant.")
+            # Very subtle movement
+            motion.setAngles("HeadYaw", 0.05, 0.05)  # Smaller movement
+            time.sleep(0.5)
+            motion.setAngles("HeadYaw", -0.05, 0.05)  # Smaller movement
+            time.sleep(0.5)
+            motion.setAngles("HeadYaw", 0.0, 0.05)
+        
+        # Increment the count
+        detection_count += 1
+        
+        # Reset LEDs after a moment
+        time.sleep(1.0)
+        leds.fadeRGB("FaceLeds", 0xFFFFFF, 0.5)
+        
+        # Return to centered position
+        motion.setAngles("HeadYaw", 0.0, 0.1)
+        motion.setAngles("HeadPitch", 0.0, 0.1)
+        
+        # Ask if they want to continue
+        if detection_count < 10:
+            tts.say("Would you like me to detect another emotion?")
+    
+    # Conclusion
+    tts.say("Thank you for helping me demonstrate my emotion detection capabilities.")
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("Mood detection demo stopped by user")
+    except Exception as e:
+        print("An error occurred:", e)

@@ -1,0 +1,556 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+# NAO Robot Emotion Response Demo with Speech Recognition
+# This script responds to spoken emotions with animations
+# IP Address: 172.20.95.118
+
+from naoqi import ALProxy
+import time
+import random
+
+# Robot IP
+IP = "172.20.95.118"
+PORT = 9559
+
+def main():
+    """Run the emotion response demo with speech recognition"""
+    print("Starting NAO emotion response demo...")
+    
+    try:
+        # Initialize proxies
+        tts = ALProxy("ALTextToSpeech", IP, PORT)
+        motion = ALProxy("ALMotion", IP, PORT)
+        posture = ALProxy("ALRobotPosture", IP, PORT)
+        leds = ALProxy("ALLeds", IP, PORT)
+        memory = ALProxy("ALMemory", IP, PORT)
+        speech_recognition = ALProxy("ALSpeechRecognition", IP, PORT)
+        
+        print("Connected to NAO successfully")
+        
+        # Wake up robot
+        motion.wakeUp()
+        posture.goToPosture("Stand", 0.8)
+        
+        # Introduction
+        tts.say("I will now demonstrate how I can respond to different emotions.")
+        time.sleep(0.5)
+        tts.say("Please clearly say an emotion word, and I'll respond accordingly.")
+        
+        # Setup speech recognition
+        setup_speech_recognition(speech_recognition, memory)
+        
+        # Run the emotion response demo with speech recognition
+        run_speech_emotion_demo(tts, motion, leds, memory, speech_recognition, posture)
+        
+        # Cleanup
+        speech_recognition.unsubscribe("EmotionDemo")
+        motion.setAngles("HeadYaw", 0.0, 0.1)
+        motion.setAngles("HeadPitch", 0.0, 0.1)
+        leds.fadeRGB("FaceLeds", 0xFFFFFF, 0.5)  # Back to white
+        
+        return True
+        
+    except Exception as e:
+        print("Error in emotional response demo:", e)
+        try:
+            # Try to clean up
+            posture = ALProxy("ALRobotPosture", IP, PORT)
+            posture.goToPosture("Stand", 0.8)
+        except:
+            pass
+        return False
+
+def setup_speech_recognition(speech_recognition, memory):
+    """Configure speech recognition for emotion detection"""
+    # Try to unsubscribe first to make sure we're starting fresh
+    try:
+        speech_recognition.unsubscribe("EmotionDemo")
+    except:
+        pass
+        
+    # Set language
+    speech_recognition.pause(True)
+    speech_recognition.setLanguage("English")
+    
+    # Define vocabulary - just the basic emotion words for simplicity
+    vocabulary = ["happy", "sad", "mad", "angry", "calm"]
+    
+    # Set vocabulary
+    speech_recognition.setVocabulary(vocabulary, False)
+    speech_recognition.pause(False)
+    
+    # Clear previous word recognition
+    try:
+        memory.removeData("WordRecognized")
+    except:
+        pass
+    
+    # Subscribe to recognition events
+    speech_recognition.subscribe("EmotionDemo")
+    print("Speech recognition setup complete - vocabulary:", vocabulary)
+
+def run_speech_emotion_demo(tts, motion, leds, memory, speech_recognition, posture):
+    """Run the emotion response demo with speech recognition"""
+    continue_demo = True
+    
+    while continue_demo:
+        # Get emotion from speech
+        emotion = listen_for_emotion(tts, leds, memory)
+        
+        if emotion is None:
+            # No emotion detected, try again or exit
+            print("No clear emotion detected. Would you like to try again? (y/n)")
+            try_again = raw_input().strip().lower()
+            if try_again != 'y':
+                continue_demo = False
+            continue
+        
+        # Acknowledge emotion
+        tts.say("I heard you say " + emotion + ". Here's my response:")
+        
+        # Respond based on emotion
+        if emotion == "happy":
+            respond_to_happy(tts, motion, leds, posture)
+        elif emotion == "sad":
+            respond_to_sad(tts, motion, leds, posture)
+        elif emotion in ["mad", "angry"]:
+            respond_to_mad(tts, motion, leds, posture)
+        elif emotion == "calm":
+            respond_to_calm(tts, motion, leds, posture)
+        
+        # Ask if they want to continue
+        tts.say("Would you like to try another emotion?")
+        print("Continue with another emotion? (y/n)")
+        continue_choice = raw_input().strip().lower()
+        
+        if continue_choice != 'y':
+            continue_demo = False
+            tts.say("Thank you for participating in my emotion response demonstration.")
+
+def listen_for_emotion(tts, leds, memory):
+    """Listen for an emotion keyword with proper pausing"""
+    # Clear previous word recognition
+    memory.insertData("WordRecognized", [])
+    
+    # Indicate we're about to listen
+    tts.say("Please clearly say one of these emotions: happy, sad, mad, or calm.")
+    
+    # Important: Wait after speaking before listening
+    time.sleep(1.0)
+    
+    # Visual indicator that we're listening
+    leds.fadeRGB("EarLeds", 0x0000FF, 0.3)  # Blue ears for listening
+    
+    # Tell user we're listening and give clear instructions
+    tts.say("I'm listening now. Please say just one emotion word.")
+    
+    print("Listening for emotion...")
+    
+    # Wait for recognition or timeout
+    timeout = 10.0  # 10 seconds to detect an emotion
+    start_time = time.time()
+    
+    # Map different variants to canonical emotions
+    emotion_map = {
+        "happy": "happy",
+        "sad": "sad", 
+        "mad": "mad",
+        "angry": "mad",
+        "calm": "calm"
+    }
+    
+    # Listen until timeout
+    detected_emotion = None
+    
+    while time.time() - start_time < timeout and detected_emotion is None:
+        # Get recognized word
+        word_data = memory.getData("WordRecognized")
+        
+        # Check if we got a valid recognition
+        if word_data and len(word_data) >= 2 and word_data[1] > 0.4:
+            recognized_word = word_data[0].lower()
+            confidence = word_data[1]
+            print("Recognized: '{}' with confidence {}".format(recognized_word, confidence))
+            
+            # Map to emotion if valid
+            if recognized_word in emotion_map:
+                detected_emotion = emotion_map[recognized_word]
+                break
+                
+        # Short sleep to prevent CPU hogging
+        time.sleep(0.1)
+    
+    # Turn off listening indicator
+    leds.fadeRGB("EarLeds", 0xFFFFFF, 0.3)
+    
+    # Print result
+    if detected_emotion:
+        print("Detected emotion:", detected_emotion)
+    else:
+        print("No emotion detected within timeout")
+        
+        # Important: Use a backup method for demo reliability
+        print("\nFor demo purposes, you can type an emotion:")
+        print("1 - happy")
+        print("2 - sad")
+        print("3 - mad")
+        print("4 - calm")
+        backup_input = raw_input("Type 1-4 or press Enter to try voice again: ").strip()
+        
+        if backup_input == "1":
+            detected_emotion = "happy"
+        elif backup_input == "2":
+            detected_emotion = "sad"
+        elif backup_input == "3":
+            detected_emotion = "mad"
+        elif backup_input == "4":
+            detected_emotion = "calm"
+    
+    return detected_emotion
+
+        # Robot arm movements
+        motion.setAngles("LShoulderPitch", 0.4, 0.2)  # Left arm position
+        motion.setAngles("RShoulderPitch", 0.4, 0.2)  # Right arm position
+        motion.setAngles("LElbowRoll", -1.4, 0.2)  # Left elbow bent
+        motion.setAngles("RElbowRoll", 1.4, 0.2)  # Right elbow bent
+        
+        # Right arm robot moves
+        motion.setAngles("RShoulderPitch", 0.8, 0.2)
+        time.sleep(0.4)
+        motion.setAngles("RShoulderPitch", 0.0, 0.2)
+        time.sleep(0.4)
+        
+        # Left arm robot moves
+        motion.setAngles("LShoulderPitch", 0.8, 0.2)
+        time.sleep(0.4)
+        motion.setAngles("LShoulderPitch", 0.0, 0.2)
+        time.sleep(0.4)
+
+def animated_point(motion, yaw, pitch, side):
+    """Point in a direction with animated movement"""
+    if side == "right":
+        # Point with right arm
+        motion.setAngles("RShoulderPitch", 0.4, 0.3)  # Lower shoulder
+        motion.setAngles("RShoulderRoll", -0.2, 0.3)  # Out from body
+        motion.setAngles("RElbowRoll", 0.5, 0.3)     # Bend elbow
+        motion.setAngles("RElbowYaw", 1.3, 0.3)      # Turn elbow
+        motion.setAngles("RWristYaw", 0.3, 0.3)      # Turn wrist
+        motion.setAngles("RHand", 0.8, 0.3)          # Open hand for pointing
+    else:
+        # Point with left arm
+        motion.setAngles("LShoulderPitch", 0.4, 0.3)  # Lower shoulder
+        motion.setAngles("LShoulderRoll", 0.2, 0.3)   # Out from body
+        motion.setAngles("LElbowRoll", -0.5, 0.3)     # Bend elbow
+        motion.setAngles("LElbowYaw", -1.3, 0.3)      # Turn elbow
+        motion.setAngles("LWristYaw", -0.3, 0.3)      # Turn wrist
+        motion.setAngles("LHand", 0.8, 0.3)           # Open hand for pointing
+    
+    # Turn head in pointing direction
+    motion.setAngles("HeadYaw", yaw, 0.2)
+    motion.setAngles("HeadPitch", pitch, 0.2)
+    
+    # Hold pointing pose
+    time.sleep(1.0)
+
+def boogie_down(motion, leds):
+    """Perform funky dance moves"""
+    # Funky arm positions
+    motion.setAngles("LShoulderPitch", 0.3, 0.3)
+    motion.setAngles("RShoulderPitch", 0.3, 0.3)
+    motion.setAngles("LElbowRoll", -0.8, 0.3)
+    motion.setAngles("RElbowRoll", 0.8, 0.3)
+    
+    # Boogie sequence
+    for i in range(3):
+        # Funky move 1: Shoulder shimmy
+        motion.setAngles("LShoulderRoll", 0.3, 0.5)
+        motion.setAngles("RShoulderRoll", -0.1, 0.5)
+        motion.setAngles("HeadYaw", 0.2, 0.5)
+        leds.fadeRGB("FaceLeds", 0xFF00FF, 0.2)  # Magenta
+        time.sleep(0.4)
+        
+        motion.setAngles("LShoulderRoll", 0.1, 0.5)
+        motion.setAngles("RShoulderRoll", -0.3, 0.5)
+        motion.setAngles("HeadYaw", -0.2, 0.5)
+        leds.fadeRGB("FaceLeds", 0x00FFFF, 0.2)  # Cyan
+        time.sleep(0.4)
+        
+        # Funky move 2: Get down
+        motion.setAngles("LShoulderPitch", 0.7, 0.3)
+        motion.setAngles("RShoulderPitch", 0.7, 0.3)
+        motion.setAngles("HeadPitch", 0.2, 0.3)  # Look down
+        leds.fadeRGB("FaceLeds", 0xFFFF00, 0.2)  # Yellow
+        time.sleep(0.5)
+        
+        # Funky move 3: Get up
+        motion.setAngles("LShoulderPitch", 0.2, 0.3)
+        motion.setAngles("RShoulderPitch", 0.2, 0.3)
+        motion.setAngles("HeadPitch", -0.2, 0.3)  # Look up
+        leds.fadeRGB("FaceLeds", 0xFF00FF, 0.2)  # Magenta
+        time.sleep(0.5)
+
+def victory_pose(motion):
+    """Perform a victory/celebration pose"""
+    # Raise both arms in victory V shape
+    motion.setAngles("LShoulderPitch", -0.5, 0.3)  # Left arm up
+    motion.setAngles("RShoulderPitch", -0.5, 0.3)  # Right arm up
+    motion.setAngles("LShoulderRoll", 0.3, 0.3)    # Left arm out
+    motion.setAngles("RShoulderRoll", -0.3, 0.3)   # Right arm out
+    motion.setAngles("LElbowRoll", -0.3, 0.3)      # Straighten left elbow
+    motion.setAngles("RElbowRoll", 0.3, 0.3)       # Straighten right elbow
+    
+    # Look up proudly
+    motion.setAngles("HeadPitch", -0.3, 0.3)
+    
+    # Hold the victory pose
+    time.sleep(2.0)
+
+def slumped_posture(motion):
+    """Create a sad, slumped posture"""
+    # Slumped shoulders
+    motion.setAngles("LShoulderPitch", 1.2, 0.1)  # Shoulders dropped
+    motion.setAngles("RShoulderPitch", 1.2, 0.1)
+    
+    # Head down
+    motion.setAngles("HeadPitch", 0.3, 0.1)  # Looking down
+    
+    # Slightly pigeon-toed stance if possible
+    try:
+        motion.setAngles("LHipYawPitch", 0.1, 0.1)
+    except:
+        pass
+    
+    # Hold sad posture
+    time.sleep(1.5)
+
+def sad_arm_movements(motion):
+    """Perform slow, sad arm gestures"""
+    # Slow, heavy arm movements
+    
+    # Gesture 1: Reach out slowly then drop
+    motion.setAngles("RShoulderPitch", 0.6, 0.1)  # Extend right arm halfway
+    motion.setAngles("RElbowRoll", 0.3, 0.1)      # Slight bend
+    time.sleep(1.5)
+    
+    motion.setAngles("RShoulderPitch", 1.4, 0.1)  # Drop arm heavily
+    time.sleep(1.0)
+    
+    # Gesture 2: Both arms slight lift then drop
+    motion.setAngles("LShoulderPitch", 0.9, 0.1)
+    motion.setAngles("RShoulderPitch", 0.9, 0.1)
+    time.sleep(1.0)
+    
+    motion.setAngles("LShoulderPitch", 1.4, 0.1)
+    motion.setAngles("RShoulderPitch", 1.4, 0.1)
+    time.sleep(1.0)
+    
+    # Gesture 3: Wipe imaginary tear
+    motion.setAngles("RShoulderPitch", 0.7, 0.1)
+    motion.setAngles("RElbowRoll", 1.2, 0.1)
+    motion.setAngles("RElbowYaw", 1.5, 0.1)
+    time.sleep(1.0)
+    
+    # Hand to face as if wiping tear
+    motion.setAngles("RWristYaw", 0.3, 0.1)
+    time.sleep(1.5)
+    
+    # Return to slumped position
+    motion.setAngles("RShoulderPitch", 1.2, 0.1)
+
+def tense_posture(motion):
+    """Create a tense, angry posture"""
+    # Shoulders raised and tense
+    motion.setAngles("LShoulderPitch", 1.0, 0.2)
+    motion.setAngles("RShoulderPitch", 1.0, 0.2)
+    
+    # Arms slightly out and bent
+    motion.setAngles("LShoulderRoll", 0.2, 0.2)
+    motion.setAngles("RShoulderRoll", -0.2, 0.2)
+    motion.setAngles("LElbowRoll", -0.5, 0.2)
+    motion.setAngles("RElbowRoll", 0.5, 0.2)
+    
+    # Head slightly forward (aggressive)
+    motion.setAngles("HeadPitch", 0.1, 0.2)
+    
+    # Hold tense posture
+    time.sleep(1.0)
+
+def frustrated_arm_movements(motion):
+    """Perform agitated, frustrated arm movements"""
+    # Gesture 1: Arm fling
+    motion.setAngles("RShoulderPitch", 0.2, 0.3)  # Raise right arm
+    motion.setAngles("RElbowRoll", 0.3, 0.3)
+    time.sleep(0.5)
+    
+    motion.setAngles("RShoulderPitch", 1.0, 0.5)  # Throw down quickly
+    time.sleep(0.5)
+    
+    # Gesture 2: Double arm tense and release
+    motion.setAngles("LShoulderPitch", 0.8, 0.3)
+    motion.setAngles("RShoulderPitch", 0.8, 0.3)
+    motion.setAngles("LElbowRoll", -1.3, 0.3)  # Tight bend
+    motion.setAngles("RElbowRoll", 1.3, 0.3)   # Tight bend
+    time.sleep(0.8)  # Hold tension
+    
+    motion.setAngles("LElbowRoll", -0.5, 0.3)  # Release
+    motion.setAngles("RElbowRoll", 0.5, 0.3)   # Release
+    time.sleep(0.5)
+    
+    # Gesture 3: Shake fists
+    motion.setAngles("LShoulderPitch", 0.6, 0.3)
+    motion.setAngles("RShoulderPitch", 0.6, 0.3)
+    motion.setAngles("LElbowRoll", -1.3, 0.3)  # Tight bend for fist
+    motion.setAngles("RElbowRoll", 1.3, 0.3)   # Tight bend for fist
+    
+    # Shake sequence
+    for i in range(3):
+        motion.setAngles("LShoulderRoll", 0.1, 0.5)
+        motion.setAngles("RShoulderRoll", -0.1, 0.5)
+        time.sleep(0.2)
+        
+        motion.setAngles("LShoulderRoll", 0.2, 0.5)
+        motion.setAngles("RShoulderRoll", -0.2, 0.5)
+        time.sleep(0.2)
+
+def angry_arm_pump(motion):
+    """Perform an angry arm pump gesture"""
+    # Right arm aggressive pump
+    motion.setAngles("RShoulderPitch", 0.5, 0.3)
+    motion.setAngles("RElbowRoll", 1.5, 0.3)  # Tight bent elbow
+    time.sleep(0.5)
+    
+    # Pump sequence
+    for i in range(3):
+        # Pump down
+        motion.setAngles("RShoulderPitch", 0.7, 0.5)
+        time.sleep(0.2)
+        
+        # Pump up
+        motion.setAngles("RShoulderPitch", 0.3, 0.5)
+        time.sleep(0.2)
+
+def tense_and_release(motion):
+    """Perform a tension and release exercise"""
+    # Starting position
+    motion.setAngles("HeadPitch", 0.0, 0.1)
+    motion.setAngles("HeadYaw", 0.0, 0.1)
+    
+    # Step 1: Tense everything
+    motion.setAngles("LShoulderPitch", 0.8, 0.2)
+    motion.setAngles("RShoulderPitch", 0.8, 0.2)
+    motion.setAngles("LElbowRoll", -1.4, 0.2)  # Maximum tension
+    motion.setAngles("RElbowRoll", 1.4, 0.2)   # Maximum tension
+    motion.setAngles("LShoulderRoll", 0.3, 0.2)
+    motion.setAngles("RShoulderRoll", -0.3, 0.2)
+    motion.setAngles("HeadPitch", 0.1, 0.2)   # Slight tension in neck
+    
+    # Hold tension
+    time.sleep(2.0)
+    
+    # Step 2: Release completely
+    motion.setAngles("LShoulderPitch", 1.2, 0.1)  # Relaxed position
+    motion.setAngles("RShoulderPitch", 1.2, 0.1)  # Relaxed position
+    motion.setAngles("LElbowRoll", -0.3, 0.1)     # Relaxed bend
+    motion.setAngles("RElbowRoll", 0.3, 0.1)      # Relaxed bend
+    motion.setAngles("HeadPitch", 0.0, 0.1)       # Neutral head
+    
+    # Hold release
+    time.sleep(2.0)
+    
+    # Repeat once more with arms only
+    motion.setAngles("LShoulderPitch", 0.5, 0.2)
+    motion.setAngles("RShoulderPitch", 0.5, 0.2)
+    motion.setAngles("LElbowRoll", -1.4, 0.2)
+    motion.setAngles("RElbowRoll", 1.4, 0.2)
+    
+    # Hold tension
+    time.sleep(2.0)
+    
+    # Final release to neutral
+    motion.setAngles("LShoulderPitch", 1.0, 0.1)
+    motion.setAngles("RShoulderPitch", 1.0, 0.1)
+    motion.setAngles("LElbowRoll", -0.3, 0.1)
+    motion.setAngles("RElbowRoll", 0.3, 0.1)
+
+def graceful_movements(motion):
+    """Perform slow, graceful movements"""
+    # Starting position - centered and balanced
+    motion.setAngles("HeadPitch", 0.0, 0.1)
+    motion.setAngles("HeadYaw", 0.0, 0.1)
+    
+    # Sequence 1: Flowing arm movements
+    # Right arm graceful rise
+    motion.setAngles("RShoulderPitch", 0.4, 0.05)  # Very slow rise
+    motion.setAngles("RElbowRoll", 0.3, 0.05)      # Gentle bend
+    time.sleep(3.0)  # Hold for appreciation
+    
+    # Left arm joins
+    motion.setAngles("LShoulderPitch", 0.4, 0.05)
+    motion.setAngles("LElbowRoll", -0.3, 0.05)
+    time.sleep(3.0)
+    
+    # Both arms flow outward
+    motion.setAngles("RShoulderRoll", -0.2, 0.05)
+    motion.setAngles("LShoulderRoll", 0.2, 0.05)
+    time.sleep(2.0)
+    
+    # Both arms flow down
+    motion.setAngles("RShoulderPitch", 1.2, 0.05)
+    motion.setAngles("LShoulderPitch", 1.2, 0.05)
+    time.sleep(3.0)
+    
+    # Sequence 2: Gentle head movements
+    motion.setAngles("HeadYaw", 0.3, 0.03)  # Very slow turn
+    time.sleep(2.0)
+    motion.setAngles("HeadYaw", -0.3, 0.03)
+    time.sleep(2.0)
+    motion.setAngles("HeadYaw", 0.0, 0.03)
+    time.sleep(1.0)
+
+def body_awareness_sequence(motion):
+    """Guide attention to different body parts with movement"""
+    # Head awareness
+    motion.setAngles("HeadPitch", -0.1, 0.05)  # Slight look up
+    time.sleep(2)
+    motion.setAngles("HeadPitch", 0.1, 0.05)   # Slight look down
+    time.sleep(2)
+    motion.setAngles("HeadPitch", 0.0, 0.05)   # Center
+    time.sleep(1)
+    
+    # Shoulders awareness
+    motion.setAngles("LShoulderPitch", 1.0, 0.05)  # Slightly raised
+    motion.setAngles("RShoulderPitch", 1.0, 0.05)
+    time.sleep(2)
+    motion.setAngles("LShoulderPitch", 1.2, 0.05)  # Relaxed
+    motion.setAngles("RShoulderPitch", 1.2, 0.05)
+    time.sleep(2)
+    
+    # Arms awareness
+    motion.setAngles("LShoulderPitch", 0.5, 0.05)
+    motion.setAngles("RShoulderPitch", 0.5, 0.05)
+    motion.setAngles("LElbowRoll", -0.5, 0.05)
+    motion.setAngles("RElbowRoll", 0.5, 0.05)
+    time.sleep(3)
+    
+    # Hands awareness (slight wrist movement)
+    motion.setAngles("LWristYaw", -0.3, 0.05)
+    motion.setAngles("RWristYaw", 0.3, 0.05)
+    time.sleep(2)
+    motion.setAngles("LWristYaw", 0.0, 0.05)
+    motion.setAngles("RWristYaw", 0.0, 0.05)
+    time.sleep(1)
+    
+    # Return to center and grounded position
+    motion.setAngles("LShoulderPitch", 1.0, 0.05)
+    motion.setAngles("RShoulderPitch", 1.0, 0.05)
+    motion.setAngles("HeadPitch", 0.0, 0.05)
+    motion.setAngles("HeadYaw", 0.0, 0.05)
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("Demo stopped by user")
+    except Exception as e:
+        print("An error occurred:", e)
